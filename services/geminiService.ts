@@ -2,10 +2,26 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Idea, LandingPageContent, IndustryNode, ContactInfo } from "../types";
 
-// Модели согласно гайдлайнам
-const MODEL_TEXT_COMPLEX = 'gemini-3-pro-preview';
-const MODEL_TEXT_BASIC = 'gemini-3-flash-preview';
+const MODEL_TEXT_PRO = 'gemini-3-pro-preview';
+const MODEL_TEXT_FLASH = 'gemini-3-flash-preview';
 const MODEL_IMAGE = 'gemini-2.5-flash-image';
+
+/**
+ * Вспомогательная функция для безопасного извлечения JSON из ответа.
+ * Иногда модель возвращает JSON внутри блоков ```json ... ``` даже при запросе mimeType: application/json.
+ */
+const safeJsonParse = (text: string) => {
+  try {
+    let cleanText = text.trim();
+    if (cleanText.startsWith("```")) {
+      cleanText = cleanText.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    }
+    return JSON.parse(cleanText);
+  } catch (e) {
+    console.error("Ошибка парсинга JSON из AI:", text);
+    throw new Error("AI вернул некорректный формат данных. Попробуйте еще раз.");
+  }
+};
 
 export const generateIdeasForIndustries = async (
   industries: string[], 
@@ -14,19 +30,33 @@ export const generateIdeasForIndustries = async (
   stage: string, 
   role: string
 ): Promise<Idea[]> => {
-  console.log("Starting Ideas Generation for:", industries);
-  
-  // Создаем экземпляр непосредственно перед вызовом
+  console.info("AI Request: Starting generation...");
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
-  const prompt = `Ты — элитный бизнес-архитектор. Используй Google Search для поиска реальных проблем бизнеса 2024-2025.
-  ОТРАСЛИ: ${industries.join(', ')}. ОТДЕЛ: ${dept}. РОЛЬ: ${role}. СИТУАЦИЯ: ${context}. СТАДИЯ: ${stage}.
-  ЗАДАЧА: Сгенерируй 8 идей IT-решений (SaaS/AI/Automation). Каждое решение должно бить в конкретный финансовый убыток.`;
+  const prompt = `Ты — экспертный бизнес-консультант и архитектор IT-решений.
+  
+  КОНТЕКСТ:
+  - Отрасли: ${industries.join(', ')}
+  - Целевой отдел: ${dept}
+  - Роль пользователя: ${role}
+  - Ситуация: ${context || "Стандартная оптимизация"}
+  - Стадия бизнеса: ${stage}
+  
+  ЗАДАЧА:
+  Найди 8 конкретных "болей" (финансовых потерь) и предложи IT-продукты для их решения.
+  Каждое решение должно иметь:
+  1. problemStatement: Острая бизнес-боль (например, "Потеря 15% лидов из-за медленного ответа").
+  2. rootCauses: 3 причины, почему это происходит сейчас.
+  3. title: Название IT-решения.
+  4. roiEstimate: Оценка окупаемости (например, "3-4 месяца").
+  5. priorityScore: Число от 1 до 100 (уровень критичности).
+  
+  ВАЖНО: Верни СТРОГО массив JSON. Не пиши ничего, кроме JSON.`;
 
   try {
     const response = await ai.models.generateContent({
-      model: MODEL_TEXT_COMPLEX,
-      contents: [{ parts: [{ text: prompt }] }],
+      model: MODEL_TEXT_PRO, // Используем Pro для более точного следования формату
+      contents: prompt,
       config: { 
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -36,14 +66,14 @@ export const generateIdeasForIndustries = async (
             type: Type.OBJECT,
             properties: {
               id: { type: Type.STRING },
-              problemStatement: { type: Type.STRING, description: "Четкая бизнес-боль" },
-              rootCauses: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3 причины боли" },
-              title: { type: Type.STRING, description: "Название IT-продукта" },
+              problemStatement: { type: Type.STRING },
+              rootCauses: { type: Type.ARRAY, items: { type: Type.STRING } },
+              title: { type: Type.STRING },
               description: { type: Type.STRING },
               department: { type: Type.STRING },
               roiEstimate: { type: Type.STRING },
               targetRole: { type: Type.STRING },
-              priorityScore: { type: Type.INTEGER, description: "Уровень критичности 1-100" }
+              priorityScore: { type: Type.INTEGER }
             },
             required: ["id", "problemStatement", "rootCauses", "title", "description", "department", "roiEstimate", "targetRole", "priorityScore"]
           }
@@ -52,216 +82,91 @@ export const generateIdeasForIndustries = async (
     });
 
     const text = response.text;
-    if (!text) {
-      console.warn("Empty response from AI");
-      return [];
-    }
+    if (!text) throw new Error("AI вернул пустой ответ (возможно, сработали фильтры безопасности)");
     
-    return JSON.parse(text);
-  } catch (e) {
-    console.error("CRITICAL ERROR in generateIdeasForIndustries:", e);
-    return [];
+    return safeJsonParse(text);
+  } catch (e: any) {
+    console.error("Critical AI Error:", e);
+    // Пробрасываем детали ошибки для отображения в UI
+    throw new Error(e.message || "Неизвестная ошибка Gemini API");
   }
 };
 
-export const generateProjectImage = async (prompt: string): Promise<string | null> => {
-  console.log("Generating Image for:", prompt);
+export const expandIndustryNode = async (label: string): Promise<any[]> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
+  const prompt = `Разбей направление "${label}" на 5-7 конкретных процессов. Только JSON.`;
   try {
     const response = await ai.models.generateContent({
-      model: MODEL_IMAGE,
-      contents: {
-        parts: [
-          { text: `High-quality 3D render of a futuristic software interface concept for: ${prompt}. Professional, corporate aesthetic, blue and gray tones, 4k, clean background.` }
-        ]
-      }
-    });
-
-    // Ищем часть с данными изображения в ответе nano banana моделей
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-      }
-    }
-    return null;
-  } catch (e) {
-    console.error("Image Generation Error:", e);
-    return null;
-  }
-};
-
-export const deepDiveIdea = async (idea: Idea): Promise<Partial<Idea>> => {
-  console.log("Deep Diving into:", idea.title);
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  
-  const prompt = `Проведи полный аудит проблемы: "${idea.problemStatement}". 
-  Используй Google Search для поиска бенчмарков и конкурентов. Создай план реализации.`;
-
-  try {
-    const response = await ai.models.generateContent({
-      model: MODEL_TEXT_COMPLEX,
-      contents: [{ parts: [{ text: prompt }] }],
-      config: { 
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            diagnostic: {
-              type: Type.OBJECT,
-              properties: {
-                groups: {
-                  type: Type.ARRAY,
-                  items: {
-                    type: Type.OBJECT,
-                    properties: {
-                      id: { type: Type.STRING },
-                      title: { type: Type.STRING },
-                      problems: {
-                        type: Type.ARRAY,
-                        items: {
-                          type: Type.OBJECT,
-                          properties: {
-                            issue: { type: Type.STRING },
-                            rootCause: { type: Type.STRING },
-                            metrics: {
-                              type: Type.OBJECT,
-                              properties: { financialLoss: { type: Type.STRING } },
-                              required: ["financialLoss"]
-                            }
-                          },
-                          required: ["issue", "rootCause", "metrics"]
-                        }
-                      }
-                    },
-                    required: ["id", "title", "problems"]
-                  }
-                }
-              },
-              required: ["groups"]
-            },
-            microIdeas: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  title: { type: Type.STRING },
-                  priority: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  hours: { type: Type.INTEGER },
-                  cost: { type: Type.STRING }
-                },
-                required: ["id", "title", "priority", "description", "hours", "cost"]
-              }
-            },
-            roadmap: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  phase: { type: Type.STRING },
-                  duration: { type: Type.STRING },
-                  description: { type: Type.STRING },
-                  tasks: { type: Type.ARRAY, items: { type: Type.STRING } }
-                },
-                required: ["phase", "duration", "description", "tasks"]
-              }
-            },
-            investorProposal: {
-              type: Type.OBJECT,
-              properties: {
-                pitch: { type: Type.STRING },
-                investorBenefit: { type: Type.STRING },
-                initiatorBenefit: { type: Type.STRING },
-                smartContractTerms: { type: Type.STRING }
-              },
-              required: ["pitch", "investorBenefit", "initiatorBenefit", "smartContractTerms"]
-            },
-            searchQueries: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  query: { type: Type.STRING },
-                  volume: { type: Type.INTEGER }
-                },
-                required: ["query", "volume"]
-              }
-            }
-          },
-          required: ["diagnostic", "microIdeas", "roadmap", "investorProposal", "searchQueries"]
-        }
-      }
-    });
-
-    return JSON.parse(response.text || "{}");
-  } catch (e) {
-    console.error("Deep Dive Error:", e);
-    return {};
-  }
-};
-
-export const generateLandingContent = async (idea: Idea, contacts: ContactInfo): Promise<LandingPageContent> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `Создай контент для лендинга проекта "${idea.title}". Основатель: ${contacts.name} из ${contacts.companyName}.`;
-  
-  try {
-    const response = await ai.models.generateContent({
-      model: MODEL_TEXT_BASIC,
-      contents: [{ parts: [{ text: prompt }] }],
-      config: { 
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            headline: { type: Type.STRING },
-            subheadline: { type: Type.STRING },
-            benefits: { type: Type.ARRAY, items: { type: Type.STRING } },
-            features: { type: Type.ARRAY, items: { type: Type.STRING } },
-            cta: { type: Type.STRING },
-            painPoints: { type: Type.ARRAY, items: { type: Type.STRING } },
-            founderStory: { type: Type.STRING }
-          },
-          required: ["headline", "subheadline", "benefits", "features", "cta", "painPoints", "founderStory"]
-        }
-      }
-    });
-    return JSON.parse(response.text || "{}");
-  } catch (e) {
-    console.error("Landing Content Error:", e);
-    return {
-      headline: "Ошибка генерации",
-      subheadline: "Попробуйте обновить страницу",
-      benefits: [], features: [], cta: "Назад", painPoints: [], founderStory: ""
-    };
-  }
-};
-
-export const expandIndustryNode = async (label: string): Promise<IndustryNode[]> => {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `Разбей отрасль или процесс "${label}" на 5 подпроцессов для автоматизации.`;
-  try {
-    const response = await ai.models.generateContent({
-      model: MODEL_TEXT_BASIC,
-      contents: [{ parts: [{ text: prompt }] }],
-      config: { 
+      model: MODEL_TEXT_FLASH,
+      contents: prompt,
+      config: {
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.ARRAY,
           items: {
             type: Type.OBJECT,
             properties: {
-              id: { type: Type.STRING },
               label: { type: Type.STRING },
               type: { type: Type.STRING }
             },
-            required: ["id", "label", "type"]
+            required: ["label", "type"]
           }
         }
       }
     });
-    return JSON.parse(response.text || "[]");
+    return safeJsonParse(response.text || "[]");
   } catch (e) { return []; }
+};
+
+export const generateProjectImage = async (prompt: string): Promise<string | null> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_IMAGE,
+      contents: {
+        parts: [{ text: `Professional SaaS dashboard UI/UX concept for: ${prompt}. Blue corporate style, clean, 4k.` }]
+      }
+    });
+
+    const parts = response.candidates?.[0]?.content?.parts;
+    if (parts) {
+      for (const part of parts) {
+        if (part.inlineData) {
+          return `data:image/png;base64,${part.inlineData.data}`;
+        }
+      }
+    }
+    return null;
+  } catch (e) { return null; }
+};
+
+export const deepDiveIdea = async (idea: Idea): Promise<Partial<Idea>> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const prompt = `Глубокий аудит для: ${idea.title}. Опиши диагностику, смету и roadmap. Только JSON.`;
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_TEXT_PRO,
+      contents: prompt,
+      config: { 
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json"
+      }
+    });
+    return safeJsonParse(response.text || "{}");
+  } catch (e) { return {}; }
+};
+
+export const generateLandingContent = async (idea: Idea, contacts: ContactInfo): Promise<LandingPageContent> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const prompt = `Landing content for ${idea.title}. Founder ${contacts.name}. Only JSON.`;
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_TEXT_FLASH,
+      contents: prompt,
+      config: { responseMimeType: "application/json" }
+    });
+    return safeJsonParse(response.text || "{}");
+  } catch (e) {
+    return { headline: "Error", subheadline: "", benefits: [], features: [], cta: "", painPoints: [], founderStory: "" };
+  }
 };
