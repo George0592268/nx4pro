@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Idea } from '../types';
-import { ArrowRight, AlertCircle, Zap, TrendingUp, HelpCircle } from 'lucide-react';
+import { AlertCircle, Zap, TrendingUp, ChevronRight, Activity } from 'lucide-react';
 
 interface Props {
   idea: Idea;
@@ -9,66 +9,70 @@ interface Props {
 }
 
 export const IdeaCard: React.FC<Props> = ({ idea, onSelect }) => {
+  // Safety check to prevent .map errors if AI returns non-array
+  const rootCauses = Array.isArray(idea.rootCauses) ? idea.rootCauses : [];
+
   return (
-    <div className="bg-white rounded-[2.5rem] shadow-sm border border-slate-200 p-8 hover:shadow-2xl transition-all flex flex-col h-full group relative overflow-hidden">
-      <div className="absolute top-6 right-8 bg-red-50 text-red-600 px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border border-red-100">
-        Урон: {idea.priorityScore}%
+    <div className="group flex flex-col h-full rounded-5xl border border-black/5 dark:border-white/5 bg-white/50 dark:bg-white/5 p-8 transition-all duration-500 hover:shadow-2xl hover:scale-[1.01] active:scale-[0.99] relative overflow-hidden">
+      <div className="absolute top-8 right-8 text-[10px] font-bold tracking-widest opacity-20 uppercase">
+        Match {idea.priorityScore}%
       </div>
 
-      <div className="flex gap-2 mb-6">
-        <span className="bg-slate-900 text-white px-3 py-1 rounded-lg text-[9px] font-black uppercase italic tracking-tighter">{idea.department}</span>
-        <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-tighter">{idea.targetRole}</span>
+      <div className="mb-6 flex">
+        <span className="bg-blue-500/10 text-blue-500 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider border border-blue-500/10">
+          {idea.department}
+        </span>
       </div>
       
       <div className="mb-6">
-        <div className="flex items-center gap-2 text-red-500 mb-2">
+        <div className="flex items-center gap-2 text-red-500/60 mb-3">
           <AlertCircle size={14} />
-          <span className="text-[10px] font-black uppercase tracking-widest italic">Диагноз боли</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest">Проблема</span>
         </div>
-        <h3 className="text-2xl font-black text-slate-900 leading-tight italic uppercase tracking-tighter mb-4">
+        <h3 className="text-xl font-bold leading-snug mb-4 heading-refined">
           {idea.problemStatement}
         </h3>
         
-        <div className="space-y-2 mt-4">
-            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
-                <HelpCircle size={10} /> Почему вы теряете ресурсы:
-            </div>
-            {idea.rootCauses && idea.rootCauses.length > 0 ? (
-              idea.rootCauses.map((rc, idx) => (
-                <div key={idx} className="flex gap-2 text-[11px] text-slate-600 font-bold bg-slate-50 p-2.5 rounded-xl border border-slate-100 italic">
-                    <span className="text-red-400 font-black">•</span> {rc}
-                </div>
-              ))
-            ) : (
-              <div className="text-[11px] text-slate-400 italic">Анализируем скрытые факторы...</div>
-            )}
+        <div className="space-y-2">
+            {rootCauses.slice(0, 2).map((rc, idx) => (
+              <div key={idx} className="text-xs opacity-40 font-medium italic leading-relaxed">
+                  — {rc}
+              </div>
+            ))}
         </div>
       </div>
 
-      <div className="mb-8 flex-grow">
-        <div className="flex items-center gap-2 text-blue-500 mb-2">
+      <div className="mb-10 flex-grow">
+        <div className="flex items-center gap-2 text-blue-500/60 mb-3">
           <Zap size={14} />
-          <span className="text-[10px] font-black uppercase tracking-widest italic">Цифровое решение</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest">Решение</span>
         </div>
-        <h4 className="font-black text-slate-800 uppercase italic text-sm mb-2">{idea.title}</h4>
-        <p className="text-[13px] text-slate-500 font-medium leading-relaxed italic line-clamp-3">
+        <h4 className="font-bold text-lg mb-2 tracking-tight opacity-90">{idea.title}</h4>
+        <p className="text-sm opacity-50 font-medium leading-relaxed line-clamp-3">
           {idea.description}
         </p>
       </div>
 
-      <div className="pt-6 border-t border-slate-100 flex items-center justify-between mb-6">
-        <div className="flex items-center gap-2 text-green-600">
-          <TrendingUp size={18} />
-          <span className="text-sm font-black uppercase tracking-tighter">ROI {idea.roiEstimate}</span>
+      <div className="pt-6 border-t border-black/5 dark:border-white/5 flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2 text-green-500/80">
+          <TrendingUp size={20} />
+          <div className="flex flex-col">
+            <span className="text-[8px] font-bold uppercase opacity-30 tracking-widest">ROI Прогноз</span>
+            <span className="text-sm font-bold tracking-tight">{idea.roiEstimate}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 opacity-30">
+            <Activity size={16} />
+            <span className="text-[10px] font-bold uppercase">{idea.targetRole}</span>
         </div>
       </div>
 
       <button 
         onClick={() => onSelect(idea)}
-        className="w-full py-5 bg-slate-900 text-white rounded-2xl font-black uppercase italic text-xs hover:bg-blue-600 transition-all flex items-center justify-center gap-3 active:scale-95 shadow-xl shadow-slate-200"
+        className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-semibold text-sm transition-all flex items-center justify-center gap-2 group/btn shadow-lg"
       >
-        Детальный аудит и Forge-сделка
-        <ArrowRight size={18} />
+        Детальный аудит
+        <ChevronRight size={16} className="group-hover/btn:translate-x-1 transition-transform" />
       </button>
     </div>
   );

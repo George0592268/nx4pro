@@ -34,7 +34,7 @@ export interface MicroIdea {
 
 export interface BusinessProblem {
   issue: string;
-  rootCause: string; // Первопричина (почему это происходит на самом деле)
+  rootCause: string;
   metrics: { financialLoss: string };
 }
 
@@ -47,10 +47,10 @@ export interface ProblemGroup {
 export interface InvestorProposal {
   pitch: string;
   investorBenefit: string;
-  initiatorBenefit: string; // Выгода собственника (снижение нагрузки)
+  initiatorBenefit: string;
   groupInvestmentModel: string;
   financialHighlights: string[];
-  smartContractTerms: string; // Условия ForgeProtocol
+  smartContractTerms: string;
 }
 
 export interface ContactInfo {
@@ -68,14 +68,14 @@ export interface LandingPageContent {
   features: string[];
   cta: string;
   painPoints: string[];
-  founderStory: string; // История собственника и почему он ищет партнеров
+  founderStory: string;
 }
 
 export interface Idea {
   id: string;
-  problemStatement: string; // Острая боль
-  rootCauses: string[]; // Массив первопричин для быстрого согласия
-  title: string; // Название решения
+  problemStatement: string;
+  rootCauses: string[];
+  title: string;
   description: string;
   department: string;
   roiEstimate: string;
@@ -97,9 +97,11 @@ export interface Idea {
 }
 
 export enum ViewState {
+  WELCOME = 'WELCOME',
   INDUSTRIES = 'INDUSTRIES',
   IDEAS = 'IDEAS',
   IDEA_DETAIL = 'IDEA_DETAIL',
   LANDING_GENERATOR = 'LANDING_GENERATOR',
   CATALOG = 'CATALOG',
+  PRIORITY_MATRIX = 'PRIORITY_MATRIX'
 }
