@@ -1,8 +1,7 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { Idea, LandingPageContent, IndustryNode, ContactInfo } from "../types";
 
-// Инициализация API. Ключ должен быть установлен в Environment Variables вашего хостинга (Vercel/Netlify)
+// The API key must be obtained exclusively from the environment variable process.env.API_KEY.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 // Используем модель gemini-2.0-flash-exp (бесплатная в тестовый период)
