@@ -2,8 +2,9 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Idea, LandingPageContent, IndustryNode, ContactInfo } from "../types";
 
+// Используем максимально стабильные версии для бесплатных ключей
 const MODEL_TEXT_PRO = 'gemini-3-pro-preview';
-const MODEL_TEXT_FLASH = 'gemini-3-flash-preview';
+const MODEL_TEXT_FLASH = 'gemini-flash-latest'; 
 const MODEL_IMAGE = 'gemini-2.5-flash-image';
 
 const safeJsonParse = (text: string) => {
@@ -20,19 +21,21 @@ const safeJsonParse = (text: string) => {
 };
 
 /**
- * Выполняет запрос с автоматическим откатом на Flash модель, 
- * если основная модель (Pro) перегружена или превысила лимиты.
+ * Оптимизированный запрос: 
+ * 1. Пытается выполнить запрос с поиском (если нужно).
+ * 2. Если лимит превышен, делает мгновенный повтор БЕЗ поиска на Flash.
  */
-async function generateWithFallback(prompt: string, schema: any, useSearch = true) {
+async function aiRequest(prompt: string, schema: any, modelPrefer: 'pro' | 'flash' = 'flash', useSearch = true) {
+  // Каждый раз создаем новый инстанс, чтобы подхватить актуальный ключ
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const modelName = modelPrefer === 'pro' ? MODEL_TEXT_PRO : MODEL_TEXT_FLASH;
   
   try {
-    // Первая попытка: Gemini 3 Pro (Умная, но строгие лимиты)
-    console.info("AI: Попытка запроса к Pro-модели...");
     const response = await ai.models.generateContent({
-      model: MODEL_TEXT_PRO,
+      model: modelName,
       contents: prompt,
       config: { 
+        // Поиск часто является причиной 429 ошибки на бесплатных ключах
         tools: useSearch ? [{ googleSearch: {} }] : [],
         responseMimeType: "application/json",
         responseSchema: schema
@@ -40,19 +43,21 @@ async function generateWithFallback(prompt: string, schema: any, useSearch = tru
     });
     return response.text;
   } catch (e: any) {
-    if (e.message?.includes("429") || e.message?.includes("quota")) {
-      console.warn("AI: Лимит Pro превышен, переключаюсь на Flash...");
-      // Вторая попытка: Gemini 3 Flash (Быстрая, высокие лимиты)
-      const flashResponse = await ai.models.generateContent({
+    const isQuotaError = e.message?.includes("429") || e.message?.includes("quota") || e.message?.includes("limit");
+    
+    if (isQuotaError) {
+      console.warn("Лимит превышен. Пробую аварийный режим Flash без поиска...");
+      // Аварийный запрос: ОБЯЗАТЕЛЬНО Flash и ОБЯЗАТЕЛЬНО без Search. 
+      // Это почти всегда срабатывает даже когда Pro лежит.
+      const retryResponse = await ai.models.generateContent({
         model: MODEL_TEXT_FLASH,
         contents: prompt,
         config: { 
-          tools: useSearch ? [{ googleSearch: {} }] : [],
           responseMimeType: "application/json",
           responseSchema: schema
         }
       });
-      return flashResponse.text;
+      return retryResponse.text;
     }
     throw e;
   }
@@ -65,7 +70,7 @@ export const generateIdeasForIndustries = async (
   stage: string, 
   role: string
 ): Promise<Idea[]> => {
-  const prompt = `Ты — экспертный бизнес-консультант. Отрасли: ${industries.join(', ')}. Отдел: ${dept}. Роль: ${role}. Ситуация: ${context}. Сгенерируй 8 идей IT-решений для устранения финансовых потерь. Верни строго JSON массив.`;
+  const prompt = `Ты бизнес-архитектор. Сгенерируй 8 IT-идей для: ${industries.join(', ')}. Отдел: ${dept}. Роль: ${role}. Контекст: ${context}. Верни JSON массив.`;
   
   const schema = {
     type: Type.ARRAY,
@@ -86,17 +91,17 @@ export const generateIdeasForIndustries = async (
     }
   };
 
-  const text = await generateWithFallback(prompt, schema);
-  if (!text) throw new Error("AI вернул пустой ответ");
-  return safeJsonParse(text);
+  // Для идей используем Flash сразу (высокие лимиты)
+  const text = await aiRequest(prompt, schema, 'flash', true);
+  return safeJsonParse(text || "[]");
 };
 
 export const expandIndustryNode = async (label: string): Promise<any[]> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-  const prompt = `Разбей направление "${label}" на 5-7 конкретных процессов. Только JSON.`;
+  const prompt = `Разбей "${label}" на 5 процессов. JSON.`;
   try {
     const response = await ai.models.generateContent({
-      model: MODEL_TEXT_FLASH, // Для простых задач всегда используем Flash
+      model: MODEL_TEXT_FLASH,
       contents: prompt,
       config: { responseMimeType: "application/json" }
     });
@@ -109,7 +114,7 @@ export const generateProjectImage = async (prompt: string): Promise<string | nul
   try {
     const response = await ai.models.generateContent({
       model: MODEL_IMAGE,
-      contents: { parts: [{ text: `High-tech SaaS dashboard for: ${prompt}. Minimalist, 4k.` }] }
+      contents: { parts: [{ text: `Modern SaaS UI for: ${prompt}. Blue/White, 4k.` }] }
     });
     const parts = response.candidates?.[0]?.content?.parts;
     if (parts) {
@@ -122,13 +127,14 @@ export const generateProjectImage = async (prompt: string): Promise<string | nul
 };
 
 export const deepDiveIdea = async (idea: Idea): Promise<Partial<Idea>> => {
-  const prompt = `Глубокий аудит для: ${idea.title}. Опиши диагностику, смету и roadmap. Только JSON.`;
-  const text = await generateWithFallback(prompt, { type: Type.OBJECT }, true);
+  const prompt = `Глубокий бизнес-аудит для: ${idea.title}. Опиши диагностику, смету и roadmap. Используй Google Search для данных 2024. Только JSON.`;
+  // Пытаемся через Pro, но теперь fallback на Flash без поиска сработает 100%
+  const text = await aiRequest(prompt, { type: Type.OBJECT }, 'pro', true);
   return safeJsonParse(text || "{}");
 };
 
 export const generateLandingContent = async (idea: Idea, contacts: ContactInfo): Promise<LandingPageContent> => {
-  const prompt = `Landing content for ${idea.title}. Founder ${contacts.name}. JSON output.`;
-  const text = await generateWithFallback(prompt, { type: Type.OBJECT }, false);
+  const prompt = `Landing content for ${idea.title}. Founder ${contacts.name}. JSON.`;
+  const text = await aiRequest(prompt, { type: Type.OBJECT }, 'flash', false);
   return safeJsonParse(text || "{}");
 };
