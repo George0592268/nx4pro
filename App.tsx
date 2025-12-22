@@ -1,6 +1,4 @@
 
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { IndustryTree } from './components/IndustryTree';
 import { IdeaCard } from './components/IdeaCard';
@@ -10,8 +8,7 @@ import { INITIAL_INDUSTRIES } from './constants';
 import { IndustryNode, Idea, ViewState, CompanyStage } from './types';
 import { generateIdeasForIndustries } from './services/geminiService';
 import { 
-  Rocket, Search, Filter, Briefcase, Users, MessageSquareText, 
-  BarChart3, UserCog, Timer, Globe, List, LayoutGrid, ChevronRight
+  Rocket, Search, Filter, Briefcase, Globe, Timer, AlertCircle, XCircle, ArrowRight
 } from 'lucide-react';
 
 export default function App() {
@@ -25,12 +22,13 @@ export default function App() {
   
   const [viewState, setViewState] = useState<ViewState>(ViewState.INDUSTRIES);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [countdown, setCountdown] = useState(20);
+  const [error, setError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(25);
   const timerRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (isGenerating) {
-        setCountdown(20);
+        setCountdown(25);
         timerRef.current = window.setInterval(() => {
             setCountdown(prev => (prev > 1 ? prev - 1 : 1));
         }, 1000);
@@ -41,24 +39,29 @@ export default function App() {
   }, [isGenerating]);
 
   const handleGenerateIdeas = async () => {
+    setError(null);
     const selected = industries.filter(i => i.selected).map(i => i.label);
-    if (selected.length === 0 && !customContext) return alert("Укажите специфику или выберите отрасль!");
+    if (selected.length === 0 && !customContext) {
+      setError("Выберите хотя бы одну отрасль или опишите ситуацию текстом");
+      return;
+    }
     
     setIsGenerating(true);
     setViewState(ViewState.IDEAS);
     try {
         const ideas = await generateIdeasForIndustries(selected, selectedDept, customContext, selectedStage, userRole || "Собственник");
+        if (ideas.length === 0) {
+          setError("Модель не смогла сгенерировать идеи. Проверьте API ключ в настройках проекта.");
+        }
         setGeneratedIdeas(ideas);
-    } catch (e) {
-        alert("Ошибка генерации. Попробуйте еще раз.");
+    } catch (e: any) {
+        console.error("APP ERROR:", e);
+        setError(e.message || "Произошла ошибка при обращении к ИИ");
     } finally {
         setIsGenerating(false);
     }
   };
 
-  /**
-   * Fix: Implement recursive industry node addition to support AI expansion functionality
-   */
   const handleAddSubIndustry = (parentId: string, newNodes: IndustryNode[]) => {
     setIndustries(prev => {
       const updateNodes = (nodes: IndustryNode[]): IndustryNode[] => {
@@ -91,7 +94,7 @@ export default function App() {
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
             <nav className="flex flex-col gap-1 mb-6">
                 <button 
-                    onClick={() => setViewState(ViewState.INDUSTRIES)} 
+                    onClick={() => { setViewState(ViewState.INDUSTRIES); setError(null); }} 
                     className={`flex items-center gap-3 p-3 rounded-xl font-black text-[11px] uppercase transition-all ${viewState === ViewState.INDUSTRIES ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100'}`}
                 >
                     <Filter size={14} /> Конструктор идей
@@ -131,14 +134,25 @@ export default function App() {
         </div>
 
         <div className="p-6 border-t border-slate-50">
-          <button onClick={handleGenerateIdeas} disabled={isGenerating} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black transition-all flex justify-center items-center gap-3 shadow-2xl active:scale-[0.98]">
+          <button onClick={handleGenerateIdeas} disabled={isGenerating} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black transition-all flex justify-center items-center gap-3 shadow-2xl active:scale-[0.98] disabled:opacity-50">
             {isGenerating ? <><Timer size={20} className="animate-pulse" /> {countdown}с</> : <><Search size={20} /> Найти боли и решения</>}
           </button>
         </div>
       </aside>
 
       <main className="flex-1 overflow-y-auto bg-[#f1f5f9]">
-        {viewState === ViewState.INDUSTRIES && (
+        {error && (
+          <div className="m-8 p-6 bg-red-50 border-2 border-red-200 rounded-[2rem] flex items-center gap-4 text-red-700 animate-fade-in shadow-xl">
+            <XCircle size={32} className="shrink-0" />
+            <div className="flex-1">
+              <h4 className="font-black uppercase italic text-sm">Ошибка системы</h4>
+              <p className="text-sm font-medium">{error}</p>
+            </div>
+            <button onClick={() => setError(null)} className="p-2 hover:bg-red-100 rounded-full transition-colors"><AlertCircle size={20}/></button>
+          </div>
+        )}
+
+        {viewState === ViewState.INDUSTRIES && !error && (
            <div className="h-full flex flex-col items-center justify-center p-20 text-center space-y-8 animate-fade-in">
               <div className="w-32 h-32 bg-slate-900 text-white rounded-[2.5rem] flex items-center justify-center shadow-2xl rotate-6 animate-pulse"><Rocket size={64}/></div>
               <h1 className="text-6xl font-black text-slate-900 uppercase italic leading-none tracking-tighter">IdeaForge<br/>OS Engine</h1>
@@ -152,15 +166,20 @@ export default function App() {
                 <Briefcase size={48} className="text-blue-600" /> Сгенерированные стратегии
             </h2>
             {isGenerating ? (
-                <div className="flex flex-col items-center justify-center py-40 bg-white rounded-[3rem]">
+                <div className="flex flex-col items-center justify-center py-40 bg-white rounded-[3rem] shadow-sm">
                     <div className="w-16 h-16 border-4 border-slate-900 border-t-blue-600 rounded-full animate-spin mb-6"></div>
                     <p className="text-xl font-black text-slate-900 uppercase italic">Проектируем архитектуру решений...</p>
+                    <p className="text-sm text-slate-400 mt-2 italic">Используем Gemini 3 Pro для глубокого анализа</p>
                 </div>
-            ) : (
+            ) : generatedIdeas.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {generatedIdeas.map(idea => (
                         <IdeaCard key={idea.id} idea={idea} onSelect={(i) => { setSelectedIdea(i); setViewState(ViewState.IDEA_DETAIL); }} />
                     ))}
+                </div>
+            ) : !error && (
+                <div className="py-40 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-200">
+                    <p className="font-black text-slate-400 uppercase italic">Настройте параметры в боковой панели и нажмите кнопку генерации.</p>
                 </div>
             )}
           </div>
@@ -178,7 +197,8 @@ export default function App() {
                             <h3 className="text-lg font-black uppercase italic mb-2 leading-tight group-hover:text-blue-600">{idea.problemStatement}</h3>
                             <p className="text-xs text-slate-500 mb-6 font-medium line-clamp-2">{idea.description}</p>
                             <button onClick={() => { setSelectedIdea(idea); setViewState(ViewState.IDEA_DETAIL); }} className="text-blue-600 font-black text-[10px] uppercase flex items-center gap-1 group-hover:gap-2 transition-all">
-                                Посмотреть страницу решения <ChevronRight size={12}/>
+                                {/* Fix: Use ArrowRight instead of ArrowCircleRight */}
+                                Посмотреть страницу решения <ArrowRight size={12}/>
                             </button>
                         </div>
                     )) : (
@@ -198,22 +218,14 @@ export default function App() {
                 setGeneratedIdeas(prev => prev.map(old => old.id === i.id ? i : old)); 
                 setSelectedIdea(i); 
               }}
-              onGenerateLanding={(idea, info) => setViewState(ViewState.LANDING_GENERATOR)}
+              onGenerateLanding={(idea) => setViewState(ViewState.LANDING_GENERATOR)}
             />
         )}
 
-        {/* Fix: Render LandingPage when in LANDING_GENERATOR view state */}
         {viewState === ViewState.LANDING_GENERATOR && selectedIdea && (
             <LandingPage 
               idea={selectedIdea}
               onBack={() => setViewState(ViewState.IDEA_DETAIL)}
-              onSave={(i) => {
-                setGeneratedIdeas(prev => prev.map(old => old.id === i.id ? i : old));
-                setSelectedIdea(i);
-              }}
-              selectedQueries={selectedIdea.searchQueries?.map(q => q.query) || []}
-              selectedFeatures={selectedIdea.microIdeas?.map(m => m.title) || []}
-              contactInfo={{ companyName: 'Моя Компания', phone: '+7 (999) 000-00-00', email: 'hello@company.ru' }}
             />
         )}
       </main>

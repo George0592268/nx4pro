@@ -2,10 +2,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Idea, LandingPageContent, IndustryNode, ContactInfo } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-const MODEL_TEXT = 'gemini-3-flash-preview';
-const MODEL_IMAGE = 'imagen-4.0-generate-001';
+// Модели согласно гайдлайнам
+const MODEL_TEXT_COMPLEX = 'gemini-3-pro-preview';
+const MODEL_TEXT_BASIC = 'gemini-3-flash-preview';
+const MODEL_IMAGE = 'gemini-2.5-flash-image';
 
 export const generateIdeasForIndustries = async (
   industries: string[], 
@@ -14,14 +14,19 @@ export const generateIdeasForIndustries = async (
   stage: string, 
   role: string
 ): Promise<Idea[]> => {
-  const prompt = `Ты — элитный бизнес-архитектор. Используй Google Search, чтобы найти реальные новости, отчеты об убытках и технологические тренды 2024-2025 в отраслях: ${industries.join(', ')}.
-  КОНТЕКСТ: Отдел: ${dept}. Роль пользователя: ${role}. Ситуация: ${context}. Стадия: ${stage}.
-  ЗАДАЧА: Сгенерируй 8 идей IT-решений, основанных на реальных рыночных болях.`;
+  console.log("Starting Ideas Generation for:", industries);
+  
+  // Создаем экземпляр непосредственно перед вызовом
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  const prompt = `Ты — элитный бизнес-архитектор. Используй Google Search для поиска реальных проблем бизнеса 2024-2025.
+  ОТРАСЛИ: ${industries.join(', ')}. ОТДЕЛ: ${dept}. РОЛЬ: ${role}. СИТУАЦИЯ: ${context}. СТАДИЯ: ${stage}.
+  ЗАДАЧА: Сгенерируй 8 идей IT-решений (SaaS/AI/Automation). Каждое решение должно бить в конкретный финансовый убыток.`;
 
   try {
     const response = await ai.models.generateContent({
-      model: MODEL_TEXT,
-      contents: prompt,
+      model: MODEL_TEXT_COMPLEX,
+      contents: [{ parts: [{ text: prompt }] }],
       config: { 
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -31,14 +36,14 @@ export const generateIdeasForIndustries = async (
             type: Type.OBJECT,
             properties: {
               id: { type: Type.STRING },
-              problemStatement: { type: Type.STRING },
-              rootCauses: { type: Type.ARRAY, items: { type: Type.STRING } },
-              title: { type: Type.STRING },
+              problemStatement: { type: Type.STRING, description: "Четкая бизнес-боль" },
+              rootCauses: { type: Type.ARRAY, items: { type: Type.STRING }, description: "3 причины боли" },
+              title: { type: Type.STRING, description: "Название IT-продукта" },
               description: { type: Type.STRING },
               department: { type: Type.STRING },
               roiEstimate: { type: Type.STRING },
               targetRole: { type: Type.STRING },
-              priorityScore: { type: Type.INTEGER }
+              priorityScore: { type: Type.INTEGER, description: "Уровень критичности 1-100" }
             },
             required: ["id", "problemStatement", "rootCauses", "title", "description", "department", "roiEstimate", "targetRole", "priorityScore"]
           }
@@ -46,47 +51,57 @@ export const generateIdeasForIndustries = async (
       }
     });
 
-    // Извлекаем ссылки из поиска для обоснования
-    const groundings = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    const ideas: Idea[] = JSON.parse(response.text || "[]");
-
-    return ideas.map(idea => ({
-      ...idea,
-      // Добавляем источники в описание, если они есть
-      description: idea.description + (groundings.length > 0 ? "\n\nОсновано на анализе рыночных данных." : "")
-    }));
+    const text = response.text;
+    if (!text) {
+      console.warn("Empty response from AI");
+      return [];
+    }
+    
+    return JSON.parse(text);
   } catch (e) {
-    console.error("Ideas Generation Error:", e);
+    console.error("CRITICAL ERROR in generateIdeasForIndustries:", e);
     return [];
   }
 };
 
 export const generateProjectImage = async (prompt: string): Promise<string | null> => {
+  console.log("Generating Image for:", prompt);
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
   try {
-    const response = await ai.models.generateImages({
+    const response = await ai.models.generateContent({
       model: MODEL_IMAGE,
-      prompt: `High-tech minimalist 3D render of a software interface or business concept for: ${prompt}. Futuristic, corporate blue and slate gray palette, 4k, professional photography style, clean background.`,
-      config: {
-        numberOfImages: 1,
-        aspectRatio: '16:9',
-      },
+      contents: {
+        parts: [
+          { text: `High-quality 3D render of a futuristic software interface concept for: ${prompt}. Professional, corporate aesthetic, blue and gray tones, 4k, clean background.` }
+        ]
+      }
     });
-    const base64 = response.generatedImages[0].image.imageBytes;
-    return `data:image/png;base64,${base64}`;
+
+    // Ищем часть с данными изображения в ответе nano banana моделей
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+      }
+    }
+    return null;
   } catch (e) {
-    console.error("Image Gen Error:", e);
+    console.error("Image Generation Error:", e);
     return null;
   }
 };
 
 export const deepDiveIdea = async (idea: Idea): Promise<Partial<Idea>> => {
-  const prompt = `Проведи глубокий аудит проблемы: "${idea.problemStatement}". 
-  Используй Google Search для поиска бенчмарков и стоимости аналогичных решений на рынке.`;
+  console.log("Deep Diving into:", idea.title);
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  
+  const prompt = `Проведи полный аудит проблемы: "${idea.problemStatement}". 
+  Используй Google Search для поиска бенчмарков и конкурентов. Создай план реализации.`;
 
   try {
     const response = await ai.models.generateContent({
-      model: MODEL_TEXT,
-      contents: prompt,
+      model: MODEL_TEXT_COMPLEX,
+      contents: [{ parts: [{ text: prompt }] }],
       config: { 
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -189,13 +204,13 @@ export const deepDiveIdea = async (idea: Idea): Promise<Partial<Idea>> => {
 };
 
 export const generateLandingContent = async (idea: Idea, contacts: ContactInfo): Promise<LandingPageContent> => {
-  const prompt = `Создай контент для инвестиционного лендинга проекта "${idea.title}".
-  Проблема: "${idea.problemStatement}". Основатель: ${contacts.name} из ${contacts.companyName}.`;
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const prompt = `Создай контент для лендинга проекта "${idea.title}". Основатель: ${contacts.name} из ${contacts.companyName}.`;
   
   try {
     const response = await ai.models.generateContent({
-      model: MODEL_TEXT,
-      contents: prompt,
+      model: MODEL_TEXT_BASIC,
+      contents: [{ parts: [{ text: prompt }] }],
       config: { 
         responseMimeType: "application/json",
         responseSchema: {
@@ -215,20 +230,22 @@ export const generateLandingContent = async (idea: Idea, contacts: ContactInfo):
     });
     return JSON.parse(response.text || "{}");
   } catch (e) {
+    console.error("Landing Content Error:", e);
     return {
-      headline: "Инвестиции в автоматизацию",
-      subheadline: "Решение для " + idea.title,
-      benefits: [], features: [], cta: "Начать", painPoints: [], founderStory: ""
+      headline: "Ошибка генерации",
+      subheadline: "Попробуйте обновить страницу",
+      benefits: [], features: [], cta: "Назад", painPoints: [], founderStory: ""
     };
   }
 };
 
 export const expandIndustryNode = async (label: string): Promise<IndustryNode[]> => {
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const prompt = `Разбей отрасль или процесс "${label}" на 5 подпроцессов для автоматизации.`;
   try {
     const response = await ai.models.generateContent({
-      model: MODEL_TEXT,
-      contents: prompt,
+      model: MODEL_TEXT_BASIC,
+      contents: [{ parts: [{ text: prompt }] }],
       config: { 
         responseMimeType: "application/json",
         responseSchema: {
