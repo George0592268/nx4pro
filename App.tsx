@@ -8,7 +8,7 @@ import { INITIAL_INDUSTRIES } from './constants';
 import { IndustryNode, Idea, ViewState, CompanyStage } from './types';
 import { generateIdeasForIndustries } from './services/geminiService';
 import { 
-  Rocket, Search, Filter, Briefcase, Globe, Timer, AlertCircle, XCircle, ArrowRight, Cpu, Terminal, RefreshCw
+  Rocket, Search, Filter, Briefcase, Globe, Timer, AlertCircle, XCircle, ArrowRight, Cpu, Terminal, RefreshCw, Code
 } from 'lucide-react';
 
 export default function App() {
@@ -24,9 +24,12 @@ export default function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<{title: string, msg: string, isQuota?: boolean} | null>(null);
   const [countdown, setCountdown] = useState(30);
+  const [logs, setLogs] = useState<string[]>(["[system] nx4Lab Engine initialized...", "[system] Ready for neural mapping."]);
   const timerRef = useRef<number | null>(null);
 
   const apiKeyExists = !!process.env.API_KEY;
+
+  const addLog = (msg: string) => setLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${msg}`].slice(-5));
 
   useEffect(() => {
     if (isGenerating) {
@@ -45,17 +48,19 @@ export default function App() {
     const selected = industries.filter(i => i.selected).map(i => i.label);
     
     if (!apiKeyExists) {
-        setError({ title: "Ключ не найден", msg: "API Key отсутствует в настройках Vercel (VITE_API_KEY)." });
+        setError({ title: "Ключ не найден", msg: "API Key отсутствует." });
         return;
     }
 
     if (selected.length === 0 && !customContext) {
-      setError({ title: "Вводные данные", msg: "Выберите отрасль слева или опишите ситуацию текстом." });
+      setError({ title: "Вводные данные", msg: "Выберите отрасль или опишите ситуацию." });
       return;
     }
     
     setIsGenerating(true);
+    addLog(`Starting analysis for: ${selected.join(', ')}`);
     setViewState(ViewState.IDEAS);
+    
     try {
         const ideas = await generateIdeasForIndustries(
             selected, 
@@ -66,16 +71,18 @@ export default function App() {
         );
         
         if (!ideas || ideas.length === 0) {
-          setError({ title: "Пустой ответ", msg: "ИИ не смог сформулировать идеи. Попробуйте детализировать описание ситуации." });
+          setError({ title: "Пустой ответ", msg: "ИИ не смог сформулировать идеи." });
         } else {
           setGeneratedIdeas(ideas);
+          addLog("Success: 8 market hypotheses generated.");
         }
     } catch (e: any) {
+        addLog(`Error: ${e.message}`);
         const isQuota = e.message.includes("429") || e.message.includes("quota");
         setError({ 
           title: isQuota ? "Лимит запросов" : "Ошибка анализа", 
           msg: isQuota 
-            ? "Вы используете бесплатный тариф Gemini. Пожалуйста, подождите 30-60 секунд перед следующим запросом." 
+            ? "Вы используете бесплатный тариф Gemini. Пожалуйста, подождите 30-60 секунд." 
             : e.message,
           isQuota
         });
@@ -108,12 +115,12 @@ export default function App() {
       <aside className={`w-80 bg-white border-r border-slate-200 flex flex-col shadow-xl z-30 transition-all ${viewState === ViewState.LANDING_GENERATOR ? '-ml-80' : ''}`}>
         <div className="p-8 border-b border-slate-100 bg-slate-50/50">
           <div className="flex items-center gap-2 text-slate-900 font-black text-2xl uppercase tracking-tighter italic">
-             <Rocket className="text-blue-600 fill-blue-600" /> IdeaForge
+             <div className="bg-blue-600 p-1 rounded-lg"><Code className="text-white" size={20} /></div> nx4Lab
           </div>
-          <p className="text-[10px] text-slate-400 mt-1 font-black tracking-widest uppercase">Business Intelligence OS</p>
+          <p className="text-[10px] text-slate-400 mt-1 font-black tracking-widest uppercase ml-9">idea</p>
           
-          <div className={`mt-4 px-3 py-1.5 rounded-full text-[9px] font-black uppercase flex items-center gap-2 border ${apiKeyExists ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
-              <Cpu size={12} /> API Status: {apiKeyExists ? 'ONLINE' : 'MISSING'}
+          <div className="mt-6 p-3 bg-slate-900 rounded-xl font-mono text-[9px] text-blue-400 border border-slate-800 shadow-inner">
+             {logs.map((log, i) => <div key={i} className="truncate">{log}</div>)}
           </div>
         </div>
         
@@ -123,37 +130,25 @@ export default function App() {
                     onClick={() => { setViewState(ViewState.INDUSTRIES); setError(null); }} 
                     className={`flex items-center gap-3 p-3 rounded-xl font-black text-[11px] uppercase transition-all ${viewState === ViewState.INDUSTRIES ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100'}`}
                 >
-                    <Filter size={14} /> Конструктор идей
+                    <Terminal size={14} /> CLI Конструктор
                 </button>
                 <button 
                     onClick={() => setViewState(ViewState.CATALOG)} 
                     className={`flex items-center gap-3 p-3 rounded-xl font-black text-[11px] uppercase transition-all ${viewState === ViewState.CATALOG ? 'bg-slate-900 text-white shadow-lg' : 'text-slate-500 hover:bg-slate-100'}`}
                 >
-                    <Globe size={14} /> Каталог решений ({publishedIdeas.length})
+                    <Globe size={14} /> Реестр ({publishedIdeas.length})
                 </button>
             </nav>
 
             <div className="space-y-4 pt-4 border-t border-slate-50">
                 <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Роль / Контекст</label>
-                    <input type="text" value={userRole} onChange={(e) => setUserRole(e.target.value)} placeholder="Напр. Директор по закупкам" className="w-full p-4 border border-slate-100 rounded-2xl text-xs font-bold bg-slate-50 outline-none mt-1 focus:ring-2 ring-blue-500/20" />
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Контекст (Role)</label>
+                    <input type="text" value={userRole} onChange={(e) => setUserRole(e.target.value)} placeholder="Напр. CTO nx4Lab" className="w-full p-4 border border-slate-100 rounded-2xl text-xs font-bold bg-slate-50 outline-none mt-1 focus:ring-2 ring-blue-500/20" />
                 </div>
                 
                 <div>
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Ситуация / Проблема</label>
-                    <textarea value={customContext} onChange={(e) => setCustomContext(e.target.value)} placeholder="Опишите, где именно теряются деньги..." className="w-full h-24 p-4 border border-slate-100 rounded-2xl text-xs font-medium bg-slate-50 outline-none resize-none mt-1 focus:ring-2 ring-blue-500/20" />
-                </div>
-                
-                <div className="grid grid-cols-1 gap-4">
-                    <div>
-                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Стадия компании</label>
-                        <select value={selectedStage} onChange={(e) => setSelectedStage(e.target.value as CompanyStage)} className="w-full p-4 border border-slate-100 rounded-2xl text-xs font-bold outline-none mt-1">
-                            <option value="Startup">Стартап</option>
-                            <option value="Growth">Рост</option>
-                            <option value="Mature">Оптимизация</option>
-                            <option value="Transformation">Кризис</option>
-                        </select>
-                    </div>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Input Data</label>
+                    <textarea value={customContext} onChange={(e) => setCustomContext(e.target.value)} placeholder="Опишите ситуацию для анализа..." className="w-full h-24 p-4 border border-slate-100 rounded-2xl text-xs font-medium bg-slate-50 outline-none resize-none mt-1 focus:ring-2 ring-blue-500/20" />
                 </div>
             </div>
 
@@ -166,7 +161,7 @@ export default function App() {
 
         <div className="p-6 border-t border-slate-50">
           <button onClick={handleGenerateIdeas} disabled={isGenerating} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black transition-all flex justify-center items-center gap-3 shadow-2xl active:scale-[0.98] disabled:opacity-50">
-            {isGenerating ? <><Timer size={20} className="animate-pulse" /> {countdown}с</> : <><Search size={20} /> Найти боли и решения</>}
+            {isGenerating ? <><Timer size={20} className="animate-pulse" /> {countdown}s</> : <><Search size={20} /> Run Analysis</>}
           </button>
         </div>
       </aside>
@@ -182,7 +177,7 @@ export default function App() {
               <p className="text-sm font-bold text-slate-600 mb-4">{error.msg}</p>
               {error.isQuota && (
                   <button onClick={handleGenerateIdeas} className="flex items-center gap-2 bg-slate-900 text-white px-6 py-2 rounded-xl text-xs font-black uppercase italic hover:bg-blue-600 transition-all">
-                      <RefreshCw size={14}/> Попробовать снова
+                      <RefreshCw size={14}/> Retry
                   </button>
               )}
             </div>
@@ -192,22 +187,21 @@ export default function App() {
 
         {viewState === ViewState.INDUSTRIES && !error && (
            <div className="h-full flex flex-col items-center justify-center p-20 text-center space-y-8 animate-fade-in">
-              <div className="w-32 h-32 bg-slate-900 text-white rounded-[2.5rem] flex items-center justify-center shadow-2xl rotate-6 animate-pulse"><Rocket size={64}/></div>
-              <h1 className="text-6xl font-black text-slate-900 uppercase italic leading-none tracking-tighter">IdeaForge<br/>OS Engine</h1>
-              <p className="text-xl text-slate-500 max-w-2xl font-medium leading-relaxed italic">Система интеллектуального поиска бизнес-возможностей. Настройте параметры слева.</p>
+              <div className="w-32 h-32 bg-slate-900 text-white rounded-[2.5rem] flex items-center justify-center shadow-2xl rotate-6 animate-pulse border-4 border-blue-500"><Terminal size={64}/></div>
+              <h1 className="text-6xl font-black text-slate-900 uppercase italic leading-none tracking-tighter">nx4Lab<br/>Engine</h1>
+              <p className="text-xl text-slate-500 max-w-2xl font-medium leading-relaxed italic">Neural laboratory for entrepreneurial mapping.</p>
            </div>
         )}
 
         {viewState === ViewState.IDEAS && (
           <div className="p-10 max-w-7xl mx-auto animate-fade-in">
             <h2 className="text-5xl font-black text-slate-900 mb-12 flex items-center gap-4 tracking-tighter italic uppercase">
-                <Briefcase size={48} className="text-blue-600" /> Рыночные гипотезы
+                <Briefcase size={48} className="text-blue-600" /> Hypotheses
             </h2>
             {isGenerating ? (
                 <div className="flex flex-col items-center justify-center py-40 bg-white rounded-[3rem] shadow-sm border border-slate-200">
                     <div className="w-16 h-16 border-4 border-slate-900 border-t-blue-600 rounded-full animate-spin mb-6"></div>
-                    <p className="text-xl font-black text-slate-900 uppercase italic">Запрос к Gemini 3 Pro + Search...</p>
-                    <p className="text-sm text-slate-400 mt-2 italic">Используем гибридный анализ рынка</p>
+                    <p className="text-xl font-black text-slate-900 uppercase italic">nx4Lab: Processing via Flash Core...</p>
                 </div>
             ) : generatedIdeas.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-20">
@@ -215,35 +209,8 @@ export default function App() {
                         <IdeaCard key={idea.id} idea={idea} onSelect={(i) => { setSelectedIdea(i); setViewState(ViewState.IDEA_DETAIL); }} />
                     ))}
                 </div>
-            ) : !error && (
-                <div className="py-40 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-200">
-                    <p className="font-black text-slate-400 uppercase italic">Нажмите кнопку генерации для запуска анализа.</p>
-                </div>
-            )}
+            ) : null}
           </div>
-        )}
-
-        {viewState === ViewState.CATALOG && (
-            <div className="p-10 max-w-7xl mx-auto animate-fade-in">
-                <h2 className="text-5xl font-black text-slate-900 mb-12 flex items-center gap-4 tracking-tighter italic uppercase">
-                    <Globe size={48} className="text-green-600" /> Реестр сделок
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {publishedIdeas.length > 0 ? publishedIdeas.map(idea => (
-                        <div key={idea.id} className="bg-white p-8 rounded-3xl border border-slate-200 hover:shadow-2xl transition-all group">
-                            <h3 className="text-lg font-black uppercase italic mb-2 leading-tight group-hover:text-blue-600">{idea.problemStatement}</h3>
-                            <p className="text-xs text-slate-500 mb-6 font-medium line-clamp-2 italic">{idea.description}</p>
-                            <button onClick={() => { setSelectedIdea(idea); setViewState(ViewState.IDEA_DETAIL); }} className="text-blue-600 font-black text-[10px] uppercase flex items-center gap-1 group-hover:gap-2 transition-all">
-                                Открыть аудит <ArrowRight size={12}/>
-                            </button>
-                        </div>
-                    )) : (
-                        <div className="col-span-full py-40 text-center bg-white rounded-[3rem] border-2 border-dashed border-slate-200">
-                            <p className="font-black text-slate-400 uppercase italic">Каталог пока пуст.</p>
-                        </div>
-                    )}
-                </div>
-            </div>
         )}
 
         {viewState === ViewState.IDEA_DETAIL && selectedIdea && (
