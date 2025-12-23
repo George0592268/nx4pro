@@ -1,5 +1,7 @@
 {
   "name": "IdeaForge",
   "description": "Business Intelligence OS for IT hypothesis generation and digital process mapping.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "microphone"
+  ]
 }

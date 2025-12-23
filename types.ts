@@ -35,7 +35,11 @@ export interface MicroIdea {
 export interface BusinessProblem {
   issue: string;
   rootCause: string;
-  metrics: { financialLoss: string };
+  metrics: { 
+    financialLoss: string;
+    baseLossAmount: number;
+    recoveryPotential: number;
+  };
 }
 
 export interface ProblemGroup {
@@ -105,3 +109,11 @@ export enum ViewState {
   CATALOG = 'CATALOG',
   PRIORITY_MATRIX = 'PRIORITY_MATRIX'
 }
+
+export const AVAILABLE_MODELS = [
+  { id: 'xiaomi/mimo-v2-flash:free', name: 'Xiaomi MiMo V2 (Free)', capabilities: ['fast', 'text'] },
+  { id: 'google/gemini-2.0-flash-exp:free', name: 'Gemini 2.0 Flash (Free)', capabilities: ['search', 'multimodal', 'fast'] },
+  { id: 'deepseek/deepseek-r1:free', name: 'DeepSeek R1 (Free)', capabilities: ['reasoning', 'text'] },
+  { id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', capabilities: ['pro', 'coding'] },
+  { id: 'google/gemini-pro-1.5', name: 'Gemini 1.5 Pro', capabilities: ['search', 'long-context'] }
+];
