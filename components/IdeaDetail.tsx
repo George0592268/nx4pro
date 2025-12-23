@@ -89,7 +89,7 @@ export const IdeaDetail: React.FC<Props> = ({ idea, onBack, onUpdateIdea, onGene
             <ArrowLeft size={12} /> <span className="hidden sm:inline">К списку идей</span>
           </button>
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-black/5 dark:border-white/5 bg-black/5 dark:bg-white/5 text-[9px] font-bold uppercase tracking-widest opacity-60">
-              <Command size={12} /> <span>OpenRouter Audit</span>
+              <Command size={12} /> <span>OpenRouter NX4 Audit</span>
           </div>
       </div>
 

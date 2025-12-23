@@ -87,7 +87,7 @@ export default function App() {
         );
         setGeneratedIdeas(ideas);
     } catch (e: any) {
-        setError({ title: "API Error", msg: e.message || "Ошибка запроса к OpenRouter." });
+        setError({ title: "API Error", msg: e.message || "Ошибка запроса к OpenRouter NX4." });
     } finally {
         setIsGenerating(false);
         checkStatus();
@@ -111,7 +111,7 @@ export default function App() {
            <div className="flex justify-center"><div className="p-5 bg-blue-600 rounded-[2.5rem] shadow-3xl text-white"><Command size={56} /></div></div>
            <div className="space-y-4">
              <h1 className="text-5xl md:text-8xl font-bold tracking-tight heading-refined">IdeaForge</h1>
-             <p className="text-xl md:text-3xl opacity-60 font-medium max-w-2xl mx-auto body-refined italic">Бизнес-интеллект через OpenRouter.</p>
+             <p className="text-xl md:text-3xl opacity-60 font-medium max-w-2xl mx-auto body-refined italic">Бизнес-интеллект через OpenRouter NX4.</p>
            </div>
            <div className="pt-8">
              <button onClick={() => switchView(ViewState.INDUSTRIES)} className="group bg-blue-600 hover:bg-blue-500 text-white px-12 py-6 rounded-full font-bold text-2xl transition-all shadow-3xl flex items-center gap-6 mx-auto">
@@ -151,7 +151,7 @@ export default function App() {
                     <Cpu size={12} /> Конфигурация ИИ
                 </div>
                 <div className="space-y-2">
-                    <label className="text-[9px] font-bold uppercase opacity-30 px-1">Модель OpenRouter</label>
+                    <label className="text-[9px] font-bold uppercase opacity-30 px-1">Модель OpenRouter NX4</label>
                     <select 
                         value={selectedModel}
                         onChange={(e) => setSelectedModel(e.target.value)}
@@ -185,7 +185,7 @@ export default function App() {
           <div className="mb-4 flex flex-col gap-2 px-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-[9px] font-bold uppercase opacity-30">
-                <Globe size={12} /> OpenRouter Connected
+                <Globe size={12} /> OpenRouter NX4 Connected
               </div>
               <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[8px] font-bold ${apiStatus === 'ok' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500 animate-pulse'}`}>
                 <div className={`w-1.5 h-1.5 rounded-full ${apiStatus === 'ok' ? 'bg-green-500' : 'bg-red-500'}`}></div>
@@ -212,7 +212,7 @@ export default function App() {
            <div className="h-full flex flex-col items-center justify-center p-8 md:p-12 text-center space-y-8 max-w-4xl mx-auto">
               <div className={`w-16 h-16 md:w-20 md:h-20 rounded-3xl flex items-center justify-center shadow-2xl ${isDarkMode ? 'bg-white/10' : 'bg-black/5'}`}><Activity size={32} className="text-blue-500"/></div>
               <h1 className="text-3xl md:text-6xl font-bold heading-refined tracking-tighter">Инженерный центр</h1>
-              <p className="text-base md:text-lg opacity-40 italic font-medium">Выберите сегменты рынка и модель OpenRouter для запуска анализа.</p>
+              <p className="text-base md:text-lg opacity-40 italic font-medium">Выберите сегменты рынка и модель OpenRouter NX4 для запуска анализа.</p>
            </div>
         )}
 

@@ -118,7 +118,7 @@ export const FeedbackButton: React.FC<Props> = ({ selectedModel }) => {
           <div className="text-center space-y-6 pt-2">
             <div>
               <h3 className="font-bold text-lg heading-refined">Голосовой отзыв</h3>
-              <p className="text-[10px] opacity-40 font-bold uppercase tracking-widest mt-1">OpenRouter Transcribe</p>
+              <p className="text-[10px] opacity-40 font-bold uppercase tracking-widest mt-1">OpenRouter NX4 Transcribe</p>
             </div>
             
             {!selectedModel.includes('gemini') && (
